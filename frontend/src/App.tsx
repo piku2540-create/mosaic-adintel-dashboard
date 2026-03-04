@@ -223,15 +223,18 @@ export default function App() {
     loadBrands(filters.mosaicBrandCategory);
   }, [filters.mosaicBrandCategory, loadBrands]);
 
+  const META_ADS_API = 'https://mosaic-adintel-dashboard.onrender.com/api/meta-ads';
+
   useEffect(() => {
     let cancelled = false;
 
     async function bootstrapFromApi() {
+      setError(null);
       try {
-        const res = await fetch('http://localhost:3001/api/meta-ads');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const res = await fetch(META_ADS_API);
+        if (!res.ok) throw new Error(`Failed to load ad data (${res.status})`);
         const json: unknown = await res.json();
-        const data = (json as any)?.data;
+        const data = Array.isArray(json) ? json : (json as { data?: unknown })?.data;
         if (!Array.isArray(data)) throw new Error('Invalid response shape');
 
         const apiAds = data as ParsedAd[];
@@ -239,17 +242,20 @@ export default function App() {
 
         setDatasetAds(apiAds);
         setAds(apiAds);
-        console.log('Loaded ads from API:', apiAds.length);
 
         if (apiAds.length > 0) {
           const derivedBrands = extractBrands(apiAds, filters.mosaicBrandCategory);
           setBrands(derivedBrands);
           setFilters((f) => (f.brands.length ? f : { ...f, brands: derivedBrands.slice(0, 10) }));
+        } else {
+          setLoading(false);
         }
-      } catch {
+      } catch (e) {
         if (cancelled) return;
         setDatasetAds([]);
         setAds([]);
+        setError(e instanceof Error ? e.message : 'Failed to load ad data from server. You can upload a CSV instead.');
+        setLoading(false);
       }
     }
 
