@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AIInsightsPayload",
+  "description": "Response shape from the AI insights engine (weekly brief + detailed insights)",
+  "type": "object",
+  "required": ["generatedAt", "period", "insights", "weeklyBrief"],
+  "properties": {
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when the payload was generated"
+    },
+    "period": {
+      "type": "object",
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "type": "string", "format": "date" },
+        "to": { "type": "string", "format": "date" }
+      }
+    },
+    "insights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "title", "body"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["trend", "comparison", "gap", "longevity", "summary"]
+          },
+          "title": { "type": "string" },
+          "body": { "type": "string" },
+          "evidence": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "brand": { "type": "string" }
+        }
+      }
+    },
+    "weeklyBrief": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "5-7 bullet points for the weekly brief"
+    }
+  }
+}
