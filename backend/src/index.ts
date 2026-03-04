@@ -19,8 +19,9 @@ app.use(
       const allowed = new Set(['http://localhost:5173', 'http://127.0.0.1:5173']);
       const isLocal = allowed.has(origin);
       const isRender = origin.includes('onrender.com');
+      const isVercel = origin.includes('vercel.app');
 
-      return isLocal || isRender
+      return isLocal || isRender || isVercel
         ? callback(null, true)
         : callback(new Error(`CORS blocked origin: ${origin}`));
     },
