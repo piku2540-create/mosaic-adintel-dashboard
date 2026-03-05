@@ -1,10 +1,10 @@
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Sparkles, FileText } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import type {
   AIInsightsPayload,
-  AIInsightItem,
   BrandSummary,
   ParsedAd,
   CompetitorAggressionResult,
@@ -22,14 +22,6 @@ interface AIWeeklyBriefProps {
   alignment?: PainOfferAlignmentResult | null;
 }
 
-const typeLabels: Record<AIInsightItem['type'], string> = {
-  trend: 'Trend',
-  comparison: 'Comparison',
-  gap: 'Gap',
-  longevity: 'Longevity',
-  summary: 'Summary',
-};
-
 export function AIWeeklyBrief({
   payload,
   loading,
@@ -39,6 +31,7 @@ export function AIWeeklyBrief({
   aggression,
   alignment,
 }: AIWeeklyBriefProps) {
+  const [showDetails, setShowDetails] = useState(false);
 
   const perBrandAwareness = (() => {
     const map = new Map<string, { total: number; awareness: number }>();
@@ -112,7 +105,6 @@ export function AIWeeklyBrief({
       }
     }
 
-    // Pad to 5–7 bullets with high-signal non-brand-specific lines.
     if (aggression?.brands?.length) {
       const top = aggression.brands[0];
       bullets.push(`Most aggressive: ${top.brandName} (score ${top.aggressionScore}, ${top.totalAds} ads, ${top.avgDaysLive} avg days live).`);
@@ -130,9 +122,153 @@ export function AIWeeklyBrief({
     return unique.slice(0, Math.min(7, Math.max(5, unique.length)));
   })();
 
-  const visibleInsights = payload?.insights
-    ? payload.insights.filter((i) => !i.brand || selectedSet.has(i.brand))
-    : [];
+  const derivedDetailedInsights = useMemo(() => {
+    const items: { title: string; body: string }[] = [];
+
+    if (aggression?.brands?.length) {
+      const top = aggression.brands[0];
+      items.push({
+        title: 'Most aggressive brand in this set',
+        body: `${top.brandName} leads on aggression with ${top.totalAds} ads, avg ${top.avgDaysLive} days live, aggression score ${top.aggressionScore}.`,
+      });
+
+      const topTier = aggression.brands.filter((b) => b.tier === 'Top 25%');
+      if (topTier.length) {
+        items.push({
+          title: 'Aggression top-25% cluster',
+          body: `${topTier.length} brand(s) are in the Top-25% aggression tier (heavier testing and volume vs the rest of the market).`,
+        });
+      }
+    }
+
+    if (alignment?.byBrand?.length) {
+      const sorted = [...alignment.byBrand].sort((a, b) => b.alignmentPct - a.alignmentPct);
+      const best = sorted[0];
+      const worst = sorted[sorted.length - 1];
+      if (best) {
+        items.push({
+          title: 'Best pain–offer alignment',
+          body: `${best.brandName} is strongest: ${best.alignmentPct}% of pain-point ads include a clear offer.`,
+        });
+      }
+      if (worst && worst.brandName !== best?.brandName) {
+        items.push({
+          title: 'Weakest pain–offer alignment',
+          body: `${worst.brandName} is weakest: only ${worst.alignmentPct}% of pain-point ads include a clear offer.`,
+        });
+      }
+    }
+
+    if (ads?.length) {
+      const total = ads.length;
+
+      const stageCounts = new Map<string, number>();
+      for (const ad of ads) {
+        const stage = (ad.funnelStage || 'Unknown').trim() || 'Unknown';
+        stageCounts.set(stage, (stageCounts.get(stage) || 0) + 1);
+      }
+      const stageEntries = Array.from(stageCounts.entries()).sort((a, b) => b[1] - a[1]);
+      if (stageEntries.length) {
+        const [topStage, topCount] = stageEntries[0];
+        const pct = Math.round((topCount / total) * 100);
+        items.push({
+          title: 'Dominant funnel stage',
+          body: `"${topStage}" accounts for ~${pct}% of ads in the current view.`,
+        });
+      }
+
+      const typeCounts = new Map<string, number>();
+      for (const ad of ads) {
+        const t = ad.adCreativeType || 'Static';
+        typeCounts.set(t, (typeCounts.get(t) || 0) + 1);
+      }
+      const typeEntries = Array.from(typeCounts.entries()).sort((a, b) => b[1] - a[1]);
+      if (typeEntries.length) {
+        const [topFmt, topCount] = typeEntries[0];
+        const pct = Math.round((topCount / total) * 100);
+        items.push({
+          title: 'Creative format saturation',
+          body: `${topFmt} represents ~${pct}% of ads. Treat this as the control format while testing under-represented formats for incremental wins.`,
+        });
+      }
+
+      const withDays = ads
+        .map((ad) => ({ ad, days: ad.daysLive ?? 0 }))
+        .filter((x) => x.days > 0)
+        .sort((a, b) => b.days - a.days);
+      if (withDays.length) {
+        const top = withDays[0];
+        items.push({
+          title: 'Longest-running creative in market',
+          body: `${top.ad.brandName} has a creative live for ~${top.days} days (${top.ad.adCreativeType}, ${top.ad.messageTheme || 'Unknown'}). Likely an evergreen angle worth reverse-engineering.`,
+        });
+      }
+    }
+
+    return items;
+  }, [aggression, alignment, ads]);
+
+  const actionableInsights = useMemo(() => {
+    const recs: string[] = [];
+
+    if (aggression?.brands?.length) {
+      const top = aggression.brands[0];
+      recs.push(
+        `Benchmark your testing velocity against ${top.brandName} (aggression leader). Set a target for ads/month and average days live.`,
+      );
+    }
+
+    if (alignment?.byBrand?.length) {
+      const sorted = [...alignment.byBrand].sort((a, b) => a.alignmentPct - b.alignmentPct);
+      const weakest = sorted[0];
+      if (weakest) {
+        recs.push(
+          `Improve pain→offer translation: audit ${weakest.brandName} creatives where a pain point is present but the offer is unclear; rewrite into tighter pain-offer pairs.`,
+        );
+      }
+    }
+
+    if (ads?.length) {
+      const total = ads.length;
+
+      const stageCounts = new Map<string, number>();
+      for (const ad of ads) {
+        const stage = (ad.funnelStage || 'Unknown').trim() || 'Unknown';
+        stageCounts.set(stage, (stageCounts.get(stage) || 0) + 1);
+      }
+      const underused = Array.from(stageCounts.entries()).filter(
+        ([stage, count]) => stage.toLowerCase() !== 'unknown' && count / total < 0.1,
+      );
+      if (underused.length) {
+        recs.push(`Run a small creative test flight aimed at the underused funnel stage "${underused[0][0]}" to close journey gaps.`);
+      }
+
+      const typeCounts = new Map<string, number>();
+      for (const ad of ads) {
+        const t = ad.adCreativeType || 'Static';
+        typeCounts.set(t, (typeCounts.get(t) || 0) + 1);
+      }
+      const typeEntries = Array.from(typeCounts.entries()).sort((a, b) => b[1] - a[1]);
+      if (typeEntries.length >= 2) {
+        const [topFmt, topCount] = typeEntries[0];
+        const [secondFmt] = typeEntries[1];
+        const pct = Math.round((topCount / total) * 100);
+        recs.push(`Keep ${topFmt} as the control (~${pct}% of ads), but structure A/B tests using ${secondFmt} to probe for cheaper or more durable reach.`);
+      }
+
+      const withDays = ads
+        .map((ad) => ({ ad, days: ad.daysLive ?? 0 }))
+        .filter((x) => x.days > 0)
+        .sort((a, b) => b.days - a.days);
+      if (withDays.length) {
+        const top = withDays[0];
+        recs.push(`Use the ~${top.days}-day longest-running creative as a reference point for kill/scale decisions on your own ads.`);
+      }
+    }
+
+    const unique = Array.from(new Set(recs)).filter(Boolean);
+    return unique.slice(0, Math.min(5, Math.max(3, unique.length)));
+  }, [aggression, alignment, ads]);
 
   return (
     <motion.div
@@ -176,29 +312,42 @@ export function AIWeeklyBrief({
                     <li key={i}>{b}</li>
                   ))}
                 </ul>
+
+                {actionableInsights.length > 0 && (
+                  <div>
+                    <h4 className="mt-4 mb-2 font-medium">Actionable Insights (3–5)</h4>
+                    <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
+                      {actionableInsights.map((item, i) => (
+                        <li key={i}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
-              <div>
-                <h4 className="mb-2 font-medium">Detailed insights</h4>
-                <ul className="space-y-3">
-                  {visibleInsights.map((insight, i) => (
-                    <li key={i} className="rounded-md border bg-muted/20 p-3">
-                      <span className="text-xs font-medium uppercase tracking-wide text-primary">
-                        {typeLabels[insight.type]}
-                        {insight.brand ? ` · ${insight.brand}` : ''}
-                      </span>
-                      <p className="mt-1 font-medium text-foreground">{insight.title}</p>
-                      <p className="text-sm text-muted-foreground">{insight.body}</p>
-                      {insight.evidence?.length ? (
-                        <ul className="mt-2 list-inside list-disc text-xs text-muted-foreground">
-                          {insight.evidence.map((e, j) => (
-                            <li key={j}>{e}</li>
-                          ))}
-                        </ul>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+
+              {derivedDetailedInsights.length > 0 && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowDetails((v) => !v)}
+                    className="mb-2 flex w-full items-center justify-between text-left"
+                  >
+                    <span className="font-medium">Detailed insights</span>
+                    <span className="text-xs text-muted-foreground">{showDetails ? 'Hide' : 'Show'}</span>
+                  </button>
+
+                  {showDetails && (
+                    <ul className="space-y-3">
+                      {derivedDetailedInsights.map((insight, i) => (
+                        <li key={i} className="rounded-md border bg-muted/20 p-3">
+                          <p className="mt-0.5 font-medium text-foreground">{insight.title}</p>
+                          <p className="text-sm text-muted-foreground">{insight.body}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </>
           )}
           {!loading && !payload && (
