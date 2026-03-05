@@ -111,11 +111,49 @@ export default function App() {
   function parseMetaAdsResponse(json: unknown): ParsedAd[] {
     const data = Array.isArray(json) ? json : (json as { data?: unknown })?.data;
     if (!Array.isArray(data)) throw new Error('Invalid response shape');
-    return data as ParsedAd[];
+    return (data as ParsedAd[]).map(normalizeParsedAdFromApi);
   }
 
   function adDateKey(ad: ParsedAd): string {
     return ((ad.adFirstSeenDate || ad.startDate || '') as string).toString();
+  }
+
+  function normalizeParsedAdFromApi(ad: ParsedAd): ParsedAd {
+    // Ensure daysLive is a sensible positive number when possible.
+    let daysLive = ad.daysLive || 0;
+    if (!daysLive) {
+      const first = (ad.adFirstSeenDate || ad.startDate) as string | undefined;
+      const last = (ad.adLastSeenDate || ad.endDate) as string | undefined;
+      if (first) {
+        const start = new Date(first);
+        const end = new Date(last || new Date().toISOString().slice(0, 10));
+        if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+          const diff = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+          daysLive = Math.max(0, diff);
+        }
+      }
+    }
+
+    // Normalise creative type defensively in case upstream schema shifts.
+    let adCreativeType: ParsedAd['adCreativeType'] = ad.adCreativeType;
+    const rawFormat = (ad.adFormat || '').toString().toLowerCase();
+    if (!adCreativeType) {
+      if (rawFormat.includes('video')) adCreativeType = 'Video';
+      else if (rawFormat.includes('carousel')) adCreativeType = 'Carousel';
+      else adCreativeType = 'Static';
+    }
+
+    // Make sure messageTheme / creativeFormat are never empty strings for chart bucketing.
+    const messageTheme = (ad.messageTheme || '').toString().trim() || 'Unknown';
+    const creativeFormat = (ad.creativeFormat || '').toString().trim() || (ad.adFormat || 'Unknown');
+
+    return {
+      ...ad,
+      daysLive,
+      adCreativeType,
+      messageTheme,
+      creativeFormat,
+    };
   }
 
   function applyFiltersToAds(input: ParsedAd[], f: FilterState, availableBrands: string[]): ParsedAd[] {
@@ -553,16 +591,17 @@ export default function App() {
 
       // Fallback: backend store-driven flow (CSV upload pipeline)
       const adsRes = await getAds(currentFilters);
-      setAds(adsRes.ads);
+      const normalizedAds = adsRes.ads.map(normalizeParsedAdFromApi);
+      setAds(normalizedAds);
 
       // Derive client-side insights even for backend flow to keep behavior consistent.
-      setSummaries(computeBrandSummaries(adsRes.ads));
-      setLongevity(computeLongevityItems(adsRes.ads, 20));
+      setSummaries(computeBrandSummaries(normalizedAds));
+      setLongevity(computeLongevityItems(normalizedAds, 20));
       setGaps([]);
-      setCreativeStrength(computeCreativeStrengthResult(adsRes.ads));
-      setAggression(computeAggressionResult(adsRes.ads));
-      setEmotionFormat(computeEmotionFormatMatrix(adsRes.ads));
-      setPainOfferAlignment(computePainOfferAlignmentResult(adsRes.ads));
+      setCreativeStrength(computeCreativeStrengthResult(normalizedAds));
+      setAggression(computeAggressionResult(normalizedAds));
+      setEmotionFormat(computeEmotionFormatMatrix(normalizedAds));
+      setPainOfferAlignment(computePainOfferAlignmentResult(normalizedAds));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load data');
       setSummaries([]);
