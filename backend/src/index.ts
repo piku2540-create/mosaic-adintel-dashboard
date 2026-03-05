@@ -16,12 +16,13 @@ app.use(
       // Allow non-browser clients (no Origin header), and the local frontend dev server.
       if (!origin) return callback(null, true);
 
-      const allowed = new Set(['http://localhost:5173', 'http://127.0.0.1:5173']);
+      const allowed = new Set(['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5000', 'http://127.0.0.1:5000']);
       const isLocal = allowed.has(origin);
       const isRender = origin.includes('onrender.com');
       const isVercel = origin.includes('vercel.app');
+      const isReplit = origin.includes('replit.dev') || origin.includes('repl.co');
 
-      return isLocal || isRender || isVercel
+      return isLocal || isRender || isVercel || isReplit
         ? callback(null, true)
         : callback(new Error(`CORS blocked origin: ${origin}`));
     },

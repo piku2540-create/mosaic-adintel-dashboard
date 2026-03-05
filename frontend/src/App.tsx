@@ -607,7 +607,7 @@ export default function App() {
     loadBrands(filters.mosaicBrandCategory);
   }, [filters.mosaicBrandCategory, loadBrands]);
 
-  const META_ADS_API = 'https://mosaic-adintel-dashboard.onrender.com/api/meta-ads';
+  const META_ADS_API = '/api/meta-ads';
 
   useEffect(() => {
     let cancelled = false;
