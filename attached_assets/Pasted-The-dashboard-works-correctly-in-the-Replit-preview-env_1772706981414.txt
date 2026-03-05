@@ -1,0 +1,88 @@
+The dashboard works correctly in the Replit preview environment but analytics break after deployment on Vercel.
+
+Do NOT change any dashboard UI, components, charts, filters, or analytics logic.
+
+Only fix the dataset structure so the deployed environment returns data in the exact format expected by the dashboard.
+
+The dataset currently uses these column names:
+
+Ad_ID
+Competitor_Brand
+Mosaic_Brand_Category
+Brand_Type
+Competitor_Type
+Target_Audience
+Platform
+Ad_Format
+Ad_Type
+Message_Theme
+Hook_Type
+Hook_Text
+Scroll_Stopper_Type
+Ad_First_Seen_Date
+Ad_Last_Seen_Date
+Days Live
+Is_Currently_Active
+Month_Bucket
+Funnel_Stage
+Landing_Page_Type
+CTA
+Offer_Type
+Primary_Pain_Point
+Emotional_Trigger
+Tone
+Visual_Style
+Creator_Presence
+Doctor_or_Expert_Featured
+Community_Element
+Meme_Format
+Strategic_Tag
+
+Normalize these dataset fields to snake_case when serving the API so they match the keys used by the dashboard logic.
+
+Required conversions:
+
+Ad_ID -> ad_id
+Competitor_Brand -> competitor_brand
+Mosaic_Brand_Category -> mosaic_brand_category
+Brand_Type -> brand_type
+Competitor_Type -> competitor_type
+Target_Audience -> target_audience
+Platform -> platform
+Ad_Format -> ad_format
+Ad_Type -> ad_type
+Message_Theme -> message_theme
+Hook_Type -> hook_type
+Hook_Text -> hook_text
+Scroll_Stopper_Type -> scroll_stopper_type
+Ad_First_Seen_Date -> ad_first_seen_date
+Ad_Last_Seen_Date -> ad_last_seen_date
+Days Live -> days_live
+Is_Currently_Active -> is_currently_active
+Month_Bucket -> month_bucket
+Funnel_Stage -> funnel_stage
+Landing_Page_Type -> landing_page_type
+CTA -> cta
+Offer_Type -> offer_type
+Primary_Pain_Point -> primary_pain_point
+Emotional_Trigger -> emotional_trigger
+Tone -> tone
+Visual_Style -> visual_style
+Creator_Presence -> creator_presence
+Doctor_or_Expert_Featured -> doctor_or_expert_featured
+Community_Element -> community_element
+Meme_Format -> meme_format
+Strategic_Tag -> strategic_tag
+
+Ensure the API response structure remains:
+
+{
+  data: [],
+  total_count: number,
+  source: string,
+  last_synced: string
+}
+
+Ensure date fields remain valid ISO date strings and the days_live value is preserved.
+
+The goal is that the Vercel deployment behaves exactly like the working Replit preview without modifying any dashboard logic.
