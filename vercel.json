@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/meta-ads",
+      "destination": "/api/meta-ads"
+    }
+  ]
+}
