@@ -10,31 +10,12 @@ function isRecord(value) {
 }
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-async function resolveSampleAdsPath() {
-    const candidates = [
-        // dev (backend/src/routes -> backend/data)
-        path.resolve(__dirname, '..', '..', 'data', 'sample_ads.json'),
-        // production where process is started from backend/
-        path.resolve(process.cwd(), 'data', 'sample_ads.json'),
-        // production where process is started from repo root
-        path.resolve(process.cwd(), 'backend', 'data', 'sample_ads.json'),
-    ];
-    for (const p of candidates) {
-        try {
-            await fs.access(p);
-            return p;
-        }
-        catch {
-            // keep trying
-        }
-    }
-    // Prefer a deterministic path in error messages
-    return candidates[0];
-}
-async function ensureAdsLoadedFromSample() {
+async function ensureAdsLoadedFromMetaAdsSource() {
     if (getAds().length)
         return;
-    const dataPath = await resolveSampleAdsPath();
+    // Match `/api/meta-ads` data source: backend/data/sample_ads.json
+    // Works in dev (src/) and production (dist/) because we resolve from this file's directory.
+    const dataPath = path.resolve(__dirname, '..', '..', 'data', 'sample_ads.json');
     const raw = await fs.readFile(dataPath, 'utf8');
     let parsed;
     try {
@@ -54,12 +35,15 @@ async function ensureAdsLoadedFromSample() {
     const normalized = parseMetaAdsJson(rawAds);
     setAds(normalized);
 }
-router.get('/brands', (req, res) => {
+router.get('/brands', async (req, res) => {
     const mosaicBrandCategory = req.query.mosaicBrandCategory || undefined;
-    void ensureAdsLoadedFromSample().catch(() => {
-        // If the sample dataset can't be loaded, fall back to current in-memory state.
-        // The client will still be able to upload CSV to populate store.
-    });
+    try {
+        await ensureAdsLoadedFromMetaAdsSource();
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        return res.status(500).json({ error: 'Failed to load sample ad dataset', details: message });
+    }
     res.json({ brands: getUniqueBrands(mosaicBrandCategory) });
 });
 router.get('/', async (req, res) => {
@@ -71,7 +55,7 @@ router.get('/', async (req, res) => {
     const dateTo = req.query.dateTo;
     const mosaicBrandCategory = req.query.mosaicBrandCategory;
     try {
-        await ensureAdsLoadedFromSample();
+        await ensureAdsLoadedFromMetaAdsSource();
     }
     catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
