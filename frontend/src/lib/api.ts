@@ -1,4 +1,5 @@
-const API = '/api';
+const API_BASE = import.meta.env.VITE_API_URL;
+const API = API_BASE ? `${API_BASE}/api` : '/api';
 
 export interface UploadResponse {
   ok: boolean;
@@ -33,9 +34,18 @@ export async function getBrands(mosaicBrandCategory?: string): Promise<{ brands:
     q.set('mosaicBrandCategory', mosaicBrandCategory);
   }
   const suffix = q.toString() ? `?${q.toString()}` : '';
-  const res = await fetch(`${API}/ads/brands${suffix}`);
+
+  // Always fetch from the ads endpoint and derive brands client-side
+  const res = await fetch(`${API}/ads${suffix}`);
   if (!res.ok) throw new Error('Failed to load brands');
-  return res.json();
+
+  const json: { ads: import('@/types').ParsedAd[] } = await res.json();
+  const brandSet = new Set<string>();
+  for (const ad of json.ads) {
+    if (ad.brandName) brandSet.add(ad.brandName);
+  }
+
+  return { brands: Array.from(brandSet).sort() };
 }
 
 export interface AdsResponse {
