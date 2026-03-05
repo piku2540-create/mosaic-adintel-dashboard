@@ -202,7 +202,7 @@ export function AIWeeklyBrief({
             </>
           )}
           {!loading && !payload && (
-            <p className="text-sm text-muted-foreground">Select brands and click Refresh to generate the weekly brief.</p>
+            <p className="text-sm text-muted-foreground">Generating AI weekly brief...</p>
           )}
         </CardContent>
       </Card>

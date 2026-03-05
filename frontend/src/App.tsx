@@ -580,7 +580,9 @@ export default function App() {
 
   const loadAI = useCallback(
     async (opts?: { skipCache?: boolean }) => {
-      if ((brands.length === 0 && filters.brands.length === 0) && !filters.mosaicBrandCategory) return;
+      // Trigger AI insights if we have any ads at all, regardless of brand selection.
+      if (datasetAds.length === 0 && ads.length === 0) return;
+      
       setAiLoading(true);
       try {
         const payload = await getAIInsights(
@@ -659,8 +661,10 @@ export default function App() {
   }, [datasetAds.length, brands.length, filters.brands.length, loadDashboard]);
 
   useEffect(() => {
-    if (summaries.length > 0) loadAI();
-  }, [summaries.length, loadAI]);
+    if (ads.length > 0) {
+      loadAI();
+    }
+  }, [ads.length, loadAI]);
 
   const handleUploadSuccess = useCallback((uploadedBrands: string[]) => {
     setUploadOpen(false);
