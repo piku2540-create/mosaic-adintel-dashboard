@@ -654,7 +654,8 @@ export default function App() {
     loadBrands(filters.mosaicBrandCategory);
   }, [filters.mosaicBrandCategory, loadBrands]);
 
-  const META_ADS_API = '/api/meta-ads';
+  const API_URL = import.meta.env.VITE_API_URL;
+  const META_ADS_API = `${API_URL}/api/ads`;
 
   useEffect(() => {
     let cancelled = false;
