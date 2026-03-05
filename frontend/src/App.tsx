@@ -585,9 +585,15 @@ export default function App() {
       
       setAiLoading(true);
       try {
+        // Ensure we use the latest ads in the request if filters are empty
+        const aiFilters = {
+          ...currentFilters,
+          brands: currentFilters.brands || undefined,
+        };
+
         const payload = await getAIInsights(
           {
-            ...currentFilters,
+            ...aiFilters,
             dateFrom:
               currentFilters.dateFrom ||
               new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
@@ -656,6 +662,9 @@ export default function App() {
   useEffect(() => {
     // Run whenever filters change; `loadDashboard` decides whether to use local dataset or backend store.
     if (datasetAds.length > 0 || brands.length > 0 || filters.brands.length > 0) {
+      void loadDashboard();
+    } else if (datasetAds.length > 0) {
+      // Ensure we load dashboard even if no brands are selected yet
       void loadDashboard();
     }
   }, [datasetAds.length, brands.length, filters.brands.length, loadDashboard]);
