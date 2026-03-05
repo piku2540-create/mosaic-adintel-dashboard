@@ -37,6 +37,60 @@ import type {
   PainOfferAlignmentResult,
 } from '@/types';
 
+function getThemeCluster(theme: string | undefined | null): string {
+  const t = (theme || '').toString().toLowerCase();
+
+  if (
+    t.includes('offer') ||
+    t.includes('discount') ||
+    t.includes('sale') ||
+    t.includes('bundle') ||
+    t.includes('deal')
+  ) {
+    return 'Offer/Conversion';
+  }
+
+  if (
+    t.includes('benefit') ||
+    t.includes('performance') ||
+    t.includes('result') ||
+    t.includes('improve')
+  ) {
+    return 'Performance/Benefit';
+  }
+
+  if (
+    t.includes('trust') ||
+    t.includes('doctor') ||
+    t.includes('expert') ||
+    t.includes('clinical')
+  ) {
+    return 'Authority/Trust';
+  }
+
+  if (
+    t.includes('problem') ||
+    t.includes('pain') ||
+    t.includes('acne') ||
+    t.includes('hair') ||
+    t.includes('damage')
+  ) {
+    return 'Problem/Pain';
+  }
+
+  if (
+    t.includes('how') ||
+    t.includes('guide') ||
+    t.includes('tips') ||
+    t.includes('routine') ||
+    t.includes('education')
+  ) {
+    return 'Education';
+  }
+
+  return 'Others';
+}
+
 const defaultFilters: FilterState = {
   brands: [],
   adTypes: [],
@@ -84,7 +138,10 @@ export default function App() {
     return Array.from(set).sort();
   }
 
-  function extractMessageThemes(list: ParsedAd[], opts: { mosaicBrandCategory?: string; filters: FilterState }): string[] {
+  function extractMessageThemes(
+    list: ParsedAd[],
+    opts: { mosaicBrandCategory?: string; filters: FilterState },
+  ): string[] {
     const themes = new Set<string>();
 
     const mosaicTarget =
@@ -101,8 +158,8 @@ export default function App() {
       if (opts.filters.dateFrom && d && d < opts.filters.dateFrom) continue;
       if (opts.filters.dateTo && d && d > opts.filters.dateTo) continue;
 
-      const t = (ad.messageTheme || '').toString().trim();
-      themes.add(t || 'Unknown');
+      const cluster = ad.themeCluster || getThemeCluster(ad.messageTheme);
+      themes.add(cluster);
     }
 
     return Array.from(themes).sort((a, b) => a.localeCompare(b));
@@ -146,6 +203,7 @@ export default function App() {
     // Make sure messageTheme / creativeFormat are never empty strings for chart bucketing.
     const messageTheme = (ad.messageTheme || '').toString().trim() || 'Unknown';
     const creativeFormat = (ad.creativeFormat || '').toString().trim() || (ad.adFormat || 'Unknown');
+    const themeCluster = getThemeCluster(ad.messageTheme);
 
     return {
       ...ad,
@@ -153,6 +211,7 @@ export default function App() {
       adCreativeType,
       messageTheme,
       creativeFormat,
+      themeCluster,
     };
   }
 
@@ -172,8 +231,10 @@ export default function App() {
       if (selectedCreativeTypes.length && !selectedCreativeTypes.includes(ad.adCreativeType)) return false;
       if (selectedAdTypes.length && (!ad.adType || !selectedAdTypes.includes(ad.adType))) return false;
 
-      const theme = (ad.messageTheme || '').toString().trim() || 'Unknown';
-      if (selectedThemes.length && !selectedThemes.includes(theme)) return false;
+      if (selectedThemes.length) {
+        const cluster = ad.themeCluster || getThemeCluster(ad.messageTheme);
+        if (!selectedThemes.includes(cluster)) return false;
+      }
 
       const d = adDateKey(ad);
       if (from && d && d < from) return false;
@@ -209,8 +270,8 @@ export default function App() {
         const ct = ad.adCreativeType || 'Static';
         byCreativeType[ct] = (byCreativeType[ct] || 0) + 1;
 
-        const mt = (ad.messageTheme || '').toString().trim() || 'Unknown';
-        byMessageTheme[mt] = (byMessageTheme[mt] || 0) + 1;
+        const cluster = ad.themeCluster || getThemeCluster(ad.messageTheme);
+        byMessageTheme[cluster] = (byMessageTheme[cluster] || 0) + 1;
 
         const cf = (ad.creativeFormat || ad.adFormat || '').toString().trim() || 'Unknown';
         byCreativeFormat[cf] = (byCreativeFormat[cf] || 0) + 1;

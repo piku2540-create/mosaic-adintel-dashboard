@@ -16,6 +16,7 @@ export interface ParsedAd {
   daysLive: number;
   messageTheme: string;
   creativeFormat: string;
+  themeCluster?: string;
   competitorBrand?: string;
   mosaicBrandCategory?: string;
   brandType?: string;

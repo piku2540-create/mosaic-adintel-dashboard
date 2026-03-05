@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import type { BrandSummary } from '@/types';
-import { clusterMessageTheme, getBrandColorPalette } from '@/lib/analytics';
+import { getBrandColorPalette } from '@/lib/analytics';
 
 interface MessageThemeTrendsProps {
   summaries: BrandSummary[];
@@ -20,10 +20,7 @@ export function MessageThemeTrends({
   const aggregated: Record<string, number> = {};
   for (const s of summaries) {
     for (const [theme, count] of Object.entries(s.byMessageTheme || {})) {
-      const key =
-        viewMode === 'cluster'
-          ? clusterMessageTheme(theme)
-          : (theme || 'Unknown');
+      const key = theme || 'Others';
       aggregated[key] = (aggregated[key] || 0) + count;
     }
   }
