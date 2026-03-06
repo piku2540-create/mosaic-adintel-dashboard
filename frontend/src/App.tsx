@@ -91,6 +91,28 @@ function getThemeCluster(theme: string | undefined | null): string {
   return 'Others';
 }
 
+const THEME_CLUSTER_FILTERS = [
+  'Offer/Conversion',
+  'Performance/Benefit',
+  'Authority/Trust',
+  'Problem/Pain',
+  'Education',
+  'Others',
+] as const;
+
+const LOADING_MESSAGES = [
+  'Fetching competitor ads from the internet jungle...',
+  'Peeking at what other brands are secretly running 👀',
+  "Counting how many ads say 'doctor recommended'...",
+  'Looking for scroll-stopping hooks...',
+  'Detecting sneaky marketing tricks...',
+  "Checking which ads refuse to die (longest running)...",
+  'Grouping message themes like a marketing detective 🕵️',
+  'Studying what makes parents stop scrolling...',
+  'Scanning ad angles across brands...',
+  'Almost ready… polishing your ad intelligence insights ✨',
+] as const;
+
 const defaultFilters: FilterState = {
   brands: [],
   adTypes: [],
@@ -120,6 +142,7 @@ export default function App() {
   const [aggression, setAggression] = useState<CompetitorAggressionResult | null>(null);
   const [emotionFormat, setEmotionFormat] = useState<EmotionFormatMatrixResult | null>(null);
   const [painOfferAlignment, setPainOfferAlignment] = useState<PainOfferAlignmentResult | null>(null);
+  const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
 
   const devLog = useCallback((...args: any[]) => {
     if (import.meta.env.DEV) console.log(...args);
@@ -159,10 +182,20 @@ export default function App() {
       if (opts.filters.dateTo && d && d > opts.filters.dateTo) continue;
 
       const cluster = ad.themeCluster || getThemeCluster(ad.messageTheme);
+      if (!cluster) continue;
       themes.add(cluster);
     }
 
-    return Array.from(themes).sort((a, b) => a.localeCompare(b));
+    const ordered: string[] = [];
+    for (const label of THEME_CLUSTER_FILTERS) {
+      if (themes.has(label)) ordered.push(label);
+    }
+
+    const extras = Array.from(themes)
+      .filter((t) => !THEME_CLUSTER_FILTERS.includes(t as (typeof THEME_CLUSTER_FILTERS)[number]))
+      .sort((a, b) => a.localeCompare(b));
+
+    return [...ordered, ...extras];
   }
 
   function parseMetaAdsResponse(json: unknown): ParsedAd[] {
@@ -593,7 +626,9 @@ export default function App() {
     [datasetAds]
   );
 
-  const availableMessageThemes = extractMessageThemes(datasetAds, {
+  const themeSource = datasetAds.length ? datasetAds : ads;
+
+  const availableMessageThemes = extractMessageThemes(themeSource, {
     mosaicBrandCategory: filters.mosaicBrandCategory,
     filters,
   });
@@ -607,11 +642,16 @@ export default function App() {
     setFilters((f) => ({ ...f, messageThemes: next }));
   }, [filters.mosaicBrandCategory, availableMessageThemes.join('|')]);
 
+  const backendMessageThemes =
+    filters.messageThemes.length === 0
+      ? undefined
+      : filters.messageThemes.flatMap((t) => (t === 'Others' ? ['Others', 'Other'] : [t]));
+
   const currentFilters: DashboardFilters = {
     brands: (filters.brands.length ? filters.brands : brands) || undefined,
     adTypes: filters.adTypes.length ? filters.adTypes : undefined,
     adType: filters.adTypeFilter.length ? filters.adTypeFilter : undefined,
-    messageThemes: filters.messageThemes.length ? filters.messageThemes : undefined,
+    messageThemes: backendMessageThemes,
     dateFrom: filters.dateFrom || undefined,
     dateTo: filters.dateTo || undefined,
     mosaicBrandCategory:
@@ -776,6 +816,18 @@ export default function App() {
     }
   }, [ads.length, loadAI]);
 
+  const showInitialLoader =
+    loading && !error && datasetAds.length === 0 && brands.length === 0 && ads.length === 0;
+
+  useEffect(() => {
+    if (!showInitialLoader) return;
+    const id = window.setInterval(
+      () => setLoadingMessageIndex((idx) => (idx + 1) % LOADING_MESSAGES.length),
+      3500
+    );
+    return () => window.clearInterval(id);
+  }, [showInitialLoader]);
+
   const handleUploadSuccess = useCallback((uploadedBrands: string[]) => {
     setUploadOpen(false);
     setBrands(uploadedBrands);
@@ -849,128 +901,148 @@ export default function App() {
       <main className="w-full px-8 xl:px-16 py-8">
         <UploadModal open={uploadOpen} onOpenChange={setUploadOpen} onSuccess={handleUploadSuccess} />
 
-        {(brands.length > 0 || datasetAds.length > 0) && (
-          <FiltersBar
-            availableBrands={brands}
-            availableMessageThemes={availableMessageThemes}
-            filters={filters}
-            onFiltersChange={setFilters}
-            className="mb-6"
-          />
-        )}
-
-        {error && (
-          <motion.p
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive"
-          >
-            {error}
-          </motion.p>
-        )}
-
-        {datasetAds.length === 0 && ads.length === 0 && !loading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-muted-foreground/25 py-16 text-center"
-          >
-            <Upload className="mx-auto h-12 w-12 text-muted-foreground" />
-            <h2 className="mt-4 font-display text-lg font-semibold">No data yet</h2>
-            <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-              Upload a CSV of competitor Meta ads to see dashboards and AI insights. Include columns like Brand Name,
-              Ad Creative Type, Ad Copy, Headline, Start/End Date.
-            </p>
-            <Button className="mt-6" onClick={() => setUploadOpen(true)}>
-              Upload CSV
-            </Button>
-          </motion.div>
-        )}
-
-        <AnimatePresence>
-          {(datasetAds.length > 0 || brands.length > 0) && (
-              <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="space-y-6"
+        {showInitialLoader ? (
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex max-w-xl flex-col items-center gap-4 rounded-2xl border border-emerald-100 bg-white/80 px-8 py-10 shadow-lg"
             >
-              {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                </div>
-              ) : ads.length === 0 ? (
+              <div className="h-10 w-10 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+              <p className="text-center text-base font-medium text-slate-900">
+                {LOADING_MESSAGES[loadingMessageIndex]}
+              </p>
+              <p className="text-center text-xs text-slate-500">
+                This usually takes a few seconds while we pull fresh competitor ads.
+              </p>
+            </motion.div>
+          </div>
+        ) : (
+          <>
+            {(brands.length > 0 || datasetAds.length > 0) && (
+              <FiltersBar
+                availableBrands={brands}
+                availableMessageThemes={availableMessageThemes}
+                filters={filters}
+                onFiltersChange={setFilters}
+                className="mb-6"
+              />
+            )}
+
+            {error && (
+              <motion.p
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive"
+              >
+                {error}
+              </motion.p>
+            )}
+
+            {datasetAds.length === 0 && ads.length === 0 && !loading && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-muted-foreground/25 py-16 text-center"
+              >
+                <Upload className="mx-auto h-12 w-12 text-muted-foreground" />
+                <h2 className="mt-4 font-display text-lg font-semibold">No data yet</h2>
+                <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+                  Upload a CSV of competitor Meta ads to see dashboards and AI insights. Include columns like Brand
+                  Name, Ad Creative Type, Ad Copy, Headline, Start/End Date.
+                </p>
+                <Button className="mt-6" onClick={() => setUploadOpen(true)}>
+                  Upload CSV
+                </Button>
+              </motion.div>
+            )}
+
+            <AnimatePresence>
+              {(datasetAds.length > 0 || brands.length > 0) && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="rounded-xl border border-muted-foreground/25 bg-muted/20 p-6 text-center"
+                  exit={{ opacity: 0 }}
+                  className="space-y-6"
                 >
-                  <h2 className="font-display text-lg font-semibold">No ads found</h2>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Try widening filters (Mosaic brand, message theme, date range) or clearing selections.
-                  </p>
+                  {loading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                    </div>
+                  ) : ads.length === 0 ? (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="rounded-xl border border-muted-foreground/25 bg-muted/20 p-6 text-center"
+                    >
+                      <h2 className="font-display text-lg font-semibold">No ads found</h2>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Try widening filters (Mosaic brand, message theme, date range) or clearing selections.
+                      </p>
+                    </motion.div>
+                  ) : (
+                    <>
+                      <OverviewKPIs summaries={summaries} totalAds={totalAds} />
+                      <StrategicSnapshot creativeStrength={creativeStrength} aggression={aggression} ads={ads} />
+                      <div className="grid gap-5 lg:grid-cols-2 items-stretch">
+                        <AdFormatDistribution summaries={summaries} />
+                        <MessageThemeTrends
+                          summaries={summaries}
+                          mosaicBrandCategory={filters.mosaicBrandCategory}
+                          viewMode={themeViewMode}
+                          onViewModeChange={setThemeViewMode}
+                        />
+                      </div>
+                      <div className="grid gap-5 lg:grid-cols-2 items-stretch">
+                        <LongestRunningAds items={longevity} allAds={ads} />
+                        <GapOpportunities gaps={gaps} ads={ads} />
+                      </div>
+                      <div className="grid gap-5 lg:grid-cols-2 items-stretch">
+                        <CreativeSaturation
+                          ads={ads}
+                          mosaicBrandCategory={filters.mosaicBrandCategory}
+                          viewMode={themeViewMode}
+                        />
+                        <FunnelStageDistribution ads={ads} />
+                      </div>
+                      <div className="grid gap-5 lg:grid-cols-2 items-stretch">
+                        <PainPointOfferChart ads={ads} />
+                        <div className="hidden lg:block" />
+                      </div>
+                      <div className="grid gap-5 lg:grid-cols-2 items-stretch">
+                        <CreativeStrengthIntelligence data={creativeStrength} />
+                        <CompetitiveAggressionIndex data={aggression} />
+                      </div>
+                      <div className="grid gap-6 lg:grid-cols-2">
+                        <EmotionIntelligenceMatrix data={emotionFormat} />
+                        <PainOfferAlignmentIntelligence data={painOfferAlignment} />
+                      </div>
+                      <div className="grid gap-6 lg:grid-cols-2">
+                        <AIWeeklyBrief
+                          payload={aiPayload}
+                          loading={aiLoading}
+                          summaries={summaries}
+                          ads={ads}
+                          aggression={aggression}
+                          alignment={painOfferAlignment}
+                          onRefresh={() => loadAI({ skipCache: true })}
+                        />
+                        <ActionRecommendations
+                          ads={ads}
+                          summaries={summaries}
+                          longevity={longevity}
+                          gaps={gaps}
+                          mosaicBrandCategory={filters.mosaicBrandCategory}
+                          loading={loading || aiLoading}
+                        />
+                      </div>
+                    </>
+                  )}
                 </motion.div>
-              ) : (
-                <>
-                  <OverviewKPIs summaries={summaries} totalAds={totalAds} />
-                  <StrategicSnapshot creativeStrength={creativeStrength} aggression={aggression} ads={ads} />
-                  <div className="grid gap-5 lg:grid-cols-2 items-stretch">
-                    <AdFormatDistribution summaries={summaries} />
-                    <MessageThemeTrends
-                      summaries={summaries}
-                      mosaicBrandCategory={filters.mosaicBrandCategory}
-                      viewMode={themeViewMode}
-                      onViewModeChange={setThemeViewMode}
-                    />
-                  </div>
-                  <div className="grid gap-5 lg:grid-cols-2 items-stretch">
-                    <LongestRunningAds items={longevity} allAds={ads} />
-                    <GapOpportunities gaps={gaps} ads={ads} />
-                  </div>
-                  <div className="grid gap-5 lg:grid-cols-2 items-stretch">
-                    <CreativeSaturation
-                      ads={ads}
-                      mosaicBrandCategory={filters.mosaicBrandCategory}
-                      viewMode={themeViewMode}
-                    />
-                    <FunnelStageDistribution ads={ads} />
-                  </div>
-                  <div className="grid gap-5 lg:grid-cols-2 items-stretch">
-                    <PainPointOfferChart ads={ads} />
-                    <div className="hidden lg:block" />
-                  </div>
-                  <div className="grid gap-5 lg:grid-cols-2 items-stretch">
-                    <CreativeStrengthIntelligence data={creativeStrength} />
-                    <CompetitiveAggressionIndex data={aggression} />
-                  </div>
-                  <div className="grid gap-6 lg:grid-cols-2">
-                    <EmotionIntelligenceMatrix data={emotionFormat} />
-                    <PainOfferAlignmentIntelligence data={painOfferAlignment} />
-                  </div>
-                  <div className="grid gap-6 lg:grid-cols-2">
-                    <AIWeeklyBrief
-                      payload={aiPayload}
-                      loading={aiLoading}
-                      summaries={summaries}
-                      ads={ads}
-                      aggression={aggression}
-                      alignment={painOfferAlignment}
-                      onRefresh={() => loadAI({ skipCache: true })}
-                    />
-                    <ActionRecommendations
-                      ads={ads}
-                      summaries={summaries}
-                      longevity={longevity}
-                      gaps={gaps}
-                      mosaicBrandCategory={filters.mosaicBrandCategory}
-                      loading={loading || aiLoading}
-                    />
-                  </div>
-                </>
               )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </AnimatePresence>
+          </>
+        )}
       </main>
     </div>
   );
